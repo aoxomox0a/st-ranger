@@ -25,7 +25,24 @@ Use examples liberally, and show the expected output if you can. It's helpful to
 Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Sutta Ranger - Feature Roadmap & Architecture Log
+
+### 1. Curated Sutta Roadmaps (Guided Study Paths)
+**Concept:** A "Guide Mode" that offers a linear, curated reading experience as an alternative to the standard "Explorer Mode" (Miller Columns). Solves the problem of users feeling overwhelmed by the size of the Tipiṭaka.
+* **Implementation:** Create a local `data/roadmaps.json` file acting as a "playlist" of Sutta IDs.
+* **Data Structure:** Maps a human-readable topic (e.g., "Beginner's Path") to an array of IDs (e.g., `["mn61", "mn58", "an3.65"]`).
+* **UI Flow:** When a user finishes a sutta in Guide Mode, a "Next Sutta" action automatically loads the next text in the sequence.
+
+### 2. Persistent Reading Tracker
+**Concept:** Allow users to track their progress through the Canon, bookmark texts, and visually distinguish between read and unread suttas.
+* **Implementation:** Use `nlohmann/json` to write to a local `data/user_progress.json` file (ignored by Git) whenever the app closes or a state changes.
+* **Data Structure:** Stores arrays for `"read_suttas"`, `"bookmarked"`, and a string for `"last_read"`.
+* **UI Integration:** FTXUI conditionally styles the text in the explorer tree. E.g., `[✓]` prefix for read suttas, dim grey text for completed items, and bright colors for unread/bookmarked items.
+
+### 3. Dashboard Gamification & Quick Resume
+**Concept:** Combine the Roadmap and Tracker features to create a motivating user dashboard and reduce friction when reopening the app.
+* **Implementation (Progress Bars):** Use FTXUI's `gauge` component on the Roadmap selection menu to calculate and display completion percentages (e.g., `[████░░░░░░] 40% (2/5 Read)`).
+* **Implementation (Quick Resume):** Bind a hotkey (e.g., `r`) on the main menu that reads the `"last_read"` value from the progress JSON and instantly jumps the user back to the exact text they were studying in their previous session.
 
 ## Contributing
 State if you are open to contributions and what your requirements are for accepting them.
