@@ -1,0 +1,55 @@
+# =========================
+# CMake & Build Artifacts
+# =========================
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
+# =========================
+# LSP & Compiler Setup
+# =========================
+# Ignore the symlink in the root and any clangd cache
+compile_commands.json
+.clangd/
+.cache/
+
+# =========================
+# Compiled binaries/objects
+# =========================
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.out
+*.app
+*.exe
+sutta-ranger
+
+# =========================
+# Neovim / Editor Files
+# =========================
+*.swp
+*.swo
+*~
+Session.vim
+.vscode/
+.idea/
+
+# =========================
+# OS Generated Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Project Specific Data
+# =========================
+# Ignore the downloaded Pali Canon JSON files so you 
+# don't accidentally commit a massive database to GitLab!
+data/bilara-data/
