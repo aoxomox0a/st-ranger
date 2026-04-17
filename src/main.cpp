@@ -1,115 +1,134 @@
-#include <algorithm>
-#include <filesystem>
-#include <ftxui/component/component.hpp>
-#include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/component/component.hpp>
 #include <iostream>
-#include <string>
 #include <vector>
+#include <string>
+#include <filesystem>
+#include <algorithm>
 
-namespace fs = std::filesystem; // FIX 1: Added missing semicolon
+namespace fs = std::filesystem;
 
-// Helper to get directory names (Nikāyas)
-std::vector<std::string> get_directories(const fs::path &root) {
-  std::vector<std::string> dirs;
-  if (!fs::exists(root))
-    return {"Data not found!"};
+// --- HELPER 1: Get Nikayas ---
+std::vector<std::string> get_directories(const fs::path& root) {
+    std::vector<std::string> dirs;
+    if (!fs::exists(root)) return {"Data not found!"};
 
-  for (const auto &entry : fs::directory_iterator(root)) {
-    if (entry.is_directory()) {
-      dirs.push_back(entry.path().filename().string());
+    for (const auto& entry : fs::directory_iterator(root)) {
+        if (entry.is_directory()) dirs.push_back(entry.path().filename().string());
     }
-  }
-  std::sort(dirs.begin(), dirs.end()); // Keep them in order
-  return dirs;
+    std::sort(dirs.begin(), dirs.end());
+    return dirs;
 }
 
-// Helper to get sutta files in a specific Nikāya
-std::vector<std::string> get_sutta_files(const fs::path &nikaya_path) {
-  std::vector<std::string> files;
-  if (!fs::exists(nikaya_path))
-    return {"No suttas found"}; // Safety check
+// Global state for our actual file paths
+std::vector<fs::path> current_sutta_paths; 
 
-  for (const auto &entry : fs::directory_iterator(nikaya_path)) {
-    if (entry.is_regular_file() && entry.path().extension() == ".json") {
-      // Clean up name
-      std::string name = entry.path().stem().string();
-      size_t pos = name.find("_");
-      if (pos != std::string::npos)
-        name = name.substr(0, pos);
-      files.push_back(name);
+// --- HELPER 2: Get Suttas ---
+std::vector<std::string> get_sutta_files(const fs::path& nikaya_path) {
+    std::vector<std::string> display_names;
+    current_sutta_paths.clear();
+
+    if (!fs::exists(nikaya_path)) return {"No suttas found"};
+
+    for (const auto& entry : fs::recursive_directory_iterator(nikaya_path)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            current_sutta_paths.push_back(entry.path());
+        }
     }
-  }
-  std::sort(files.begin(), files.end());
-  return files;
+    
+    std::sort(current_sutta_paths.begin(), current_sutta_paths.end());
+
+    for (const auto& path : current_sutta_paths) {
+        std::string name = path.stem().string();
+        size_t pos = name.find("_");
+        if (pos != std::string::npos) name = name.substr(0, pos);
+        display_names.push_back(name);
+    }
+    
+    if (display_names.empty()) display_names.push_back("Empty folder");
+    return display_names;
 }
 
-// FIX 2: Everything below moved INSIDE main()
+// --- HELPER 3: Dummy Text Loader (JSON Removed) ---
+std::string get_sutta_text(int index) {
+    if (index < 0 || index >= current_sutta_paths.size()) return "No sutta selected.";
+    return "JSON parsing disabled for UI testing.\n\nFile: " + current_sutta_paths[index].filename().string();
+}
+
+// --- MAIN PROGRAM ---
 int main() {
-  using namespace ftxui;
-  auto screen = ScreenInteractive::Fullscreen();
+    using namespace ftxui;
+    auto screen = ScreenInteractive::Fullscreen();
 
-      // 1. Setup paths
-      fs::path base_path = "data/bilara-data/translation/en/sujato/sutta";
+    fs::path base_path = "data/bilara-data/translation/en/sujato/sutta";
 
-  // 2. Initial State
-  std::vector<std::string> nikayas = get_directories(base_path);
-  int sel_nikaya = 0;
+    std::vector<std::string> nikayas = get_directories(base_path);
+    int sel_nikaya = 0;
 
-  // Safety check so the app doesn't crash if the folder isn't found
-  std::vector<std::string> suttas = {"Select a Nikaya"};
-  if (nikayas[0] != "Data not found!") {
-    suttas = get_sutta_files(base_path / nikayas[sel_nikaya]);
-  }
-  int sel_sutta = 0;
-
-  // 3. Create the UI Menus
-  auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
-  auto menu_sutta = Menu(&suttas, &sel_sutta);
-
-  // 4. The Logic Bridge (Ranger behavior!)
-  menu_nikaya |= CatchEvent([&](Event event) {
-    // When the user interacts with the left column, update the middle column
-    if (sel_nikaya >= 0 && sel_nikaya < nikayas.size() &&
-        nikayas[0] != "Data not found!") {
-      suttas = get_sutta_files(base_path / nikayas[sel_nikaya]);
-      sel_sutta = 0; // Reset the sutta cursor to the top of the new list
+    std::vector<std::string> suttas = {"Loading..."};
+    if (nikayas[0] != "Data not found!") {
+        suttas = get_sutta_files(base_path / nikayas[sel_nikaya]);
     }
-    return false; // Let the event bubble up so the cursor still moves
-  });
+    int sel_sutta = 0;
 
-  // 5. The Layout (Miller Columns)
-  auto container = Container::Horizontal({
-      menu_nikaya,
-      menu_sutta,
-  });
+    std::string cached_text = get_sutta_text(sel_sutta);
+    int last_read_sutta = sel_sutta;
 
-  auto renderer = Renderer(container, [&] {
-    return hbox({
-        window(text(" Collections "), menu_nikaya->Render()) | flex,
-        window(text(" Suttas "), menu_sutta->Render()) | flex,
-        window(
-            text(" Reading Pane "),
-            vbox({text("Selected: " + (suttas.empty() ? std::string("None")
-                                                      : suttas[sel_sutta])) |
-                      bold,
-                  separator(), paragraph("The JSON reader will go here...")})) |
-            flex, // Makes the reading pane wider
+    auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
+    auto menu_sutta = Menu(&suttas, &sel_sutta);
+
+    menu_nikaya |= CatchEvent([&](Event event) {
+        if (sel_nikaya >= 0 && sel_nikaya < nikayas.size()) {
+            suttas = get_sutta_files(base_path / nikayas[sel_nikaya]);
+            sel_sutta = 0;
+        }
+        return false; 
     });
-  });
 
-  // FIX 2: Add a global event catcher to listen for the exit keys
-  renderer |= CatchEvent([&](Event event) {
-    if (event == Event::Character('q') || event == Event::Escape) {
-      screen.Exit(); // Tells the FTXUI loop to stop
-      return true;   // Tells FTXUI we successfully handled the event
-    }
-    return false; // If it wasn't 'q' or 'Esc', ignore it and let the menus
-                  // handle it
-  });
+    auto container = Container::Horizontal({
+        menu_nikaya,
+        menu_sutta,
+    });
 
-  // FIX 3: Start the actual UI loop!
-  screen.Loop(renderer); // This is what keeps the terminal app running
+    auto renderer = Renderer(container, [&] {
+        if (sel_sutta != last_read_sutta) {
+            cached_text = get_sutta_text(sel_sutta);
+            last_read_sutta = sel_sutta;
+        }
 
-  return 0;
+        auto col_1 = vbox({
+            text(" Collections ") | bold | center | color(Color::Orange1),
+            separatorLight() | color(Color::Orange1),
+            menu_nikaya->Render()
+        }) | borderRounded | size(WIDTH, EQUAL, 25); 
+
+        auto col_2 = vbox({
+            text(" Suttas ") | bold | center | color(Color::Orange1),
+            separatorLight() | color(Color::Orange1),
+            menu_sutta->Render()
+        }) | borderRounded | size(WIDTH, EQUAL, 30); 
+
+        std::string current_title = suttas.empty() ? "None" : suttas[sel_sutta];
+        auto col_3 = vbox({
+            text(" " + current_title + " ") | bold | center | color(Color::YellowLight),
+            text(" Translated by Bhikkhu Sujato ") | dim | center,
+            separatorLight() | color(Color::Orange1),
+            text(""), 
+            paragraph(cached_text) | color(Color::Grey93)
+        }) | borderRounded | flex; 
+
+        return hbox({ col_1, col_2, col_3 });
+    });
+
+    renderer |= CatchEvent([&](Event event) {
+        if (event == Event::Character('q') || event == Event::Escape) {
+            screen.Exit();
+            return true;
+        }
+        return false;
+    });
+
+    screen.Loop(renderer);
+    return 0;
 }
