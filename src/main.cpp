@@ -1,7 +1,7 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/component.hpp>
-#include "SuttaLibrary.hpp" // <-- Bringing in our backend tool kit!
+#include "SuttaLibrary.hpp"
 
 int main() {
     using namespace ftxui;
@@ -10,12 +10,21 @@ int main() {
     // 1. Initialize our backend
     SuttaLibrary::init("data/bilara-data/translation/en/sujato/sutta");
 
-    // 2. Setup the state
+    // 2. Application State
+    int current_screen = 0; // 0 = Welcome, 1 = Ranger
+
+    std::vector<std::string> baskets = {
+        "Basket of Discourses (Sutta Piṭaka)",
+        "Basket of Monastic Law (Vinaya Piṭaka) - Coming Soon",
+        "Basket of Systematic Treatises (Abhidhamma Piṭaka) - Coming Soon"
+    };
+    int sel_basket = 0;
+
     std::vector<std::string> nikayas = SuttaLibrary::get_nikayas();
     int sel_nikaya = 0;
 
     std::vector<std::string> suttas = {"Loading..."};
-    if (!nikayas.empty() && nikayas[0] != "Data not found!") {
+    if (nikayas[0] != "Data not found!") {
         suttas = SuttaLibrary::get_suttas(sel_nikaya);
     }
     int sel_sutta = 0;
@@ -24,14 +33,16 @@ int main() {
     int last_read_sutta = sel_sutta;
     int sel_paragraph = 0; 
 
-    // 3. Create the UI Menus
-    auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
-    auto menu_sutta = Menu(&suttas, &sel_sutta);
+    // 3. UI Styling Options
+    MenuOption welcome_options;
+    welcome_options.entries_option.transform = [](const EntryState& state) {
+        if (state.focused) return text(">> " + state.label) | bold | color(Color::RGB(32, 27, 19));
+        return text("  " + state.label) | color(Color::RGB(32, 27, 19));
+    };
 
     MenuOption reader_options;
     reader_options.entries_option.transform = [](const EntryState& state) {
         if (state.focused) {
-            // The active line gets a bold "> " and keeps the dark text color
             return vbox({
                 hbox({
                     text("> ") | bold | color(Color::RGB(32, 27, 19)), 
@@ -40,8 +51,6 @@ int main() {
                 text("")
             }); 
         }
-        
-        // Non-active lines get two empty spaces so the text stays perfectly aligned
         return vbox({
             hbox({
                 text("  "), 
@@ -50,9 +59,22 @@ int main() {
             text("")
         });
     };
+
+    // 4. Create the Components
+    auto menu_welcome = Menu(&baskets, &sel_basket, welcome_options);
+    auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
+    auto menu_sutta = Menu(&suttas, &sel_sutta);
     auto menu_reader = Menu(&cached_text, &sel_paragraph, reader_options);
 
-    // 4. The Logic Bridge
+    // 5. Logic Bridges
+    menu_welcome |= CatchEvent([&](Event event) {
+        if (event == Event::Return && sel_basket == 0) {
+            current_screen = 1; // Swap to the Ranger view!
+            return true; 
+        }
+        return false;
+    });
+
     menu_nikaya |= CatchEvent([&](Event event) {
         if (sel_nikaya >= 0 && sel_nikaya < nikayas.size()) {
             suttas = SuttaLibrary::get_suttas(sel_nikaya);
@@ -62,53 +84,73 @@ int main() {
         return false; 
     });
 
-    auto container = Container::Horizontal({ menu_nikaya, menu_sutta, menu_reader });
+    // 6. Group the Containers
+    auto ranger_container = Container::Horizontal({ menu_nikaya, menu_sutta, menu_reader });
+    
+    // The main router that swaps between the Welcome Screen and Ranger Screen
+    auto main_container = Container::Tab({ menu_welcome, ranger_container }, &current_screen);
 
-    // 5. The Renderer
-    auto renderer = Renderer(container, [&] {
-        if (sel_sutta != last_read_sutta) {
-            cached_text = SuttaLibrary::get_sutta_text(sel_sutta);
-            sel_paragraph = 0; 
-            last_read_sutta = sel_sutta;
+    // 7. The Dynamic Renderer
+    auto renderer = Renderer(main_container, [&] {
+        if (current_screen == 0) {
+            // --- DRAW WELCOME SCREEN ---
+            return vbox({
+                text(""), text(""), text(""), text(""), // Push down from the top
+                text("S U T T A   C E N T R A L   T U I") | bold | center,
+                text("Read the Buddha's words in your terminal") | dim | center,
+                separatorEmpty(), separatorEmpty(),
+                menu_welcome->Render() | center 
+            }) | center | color(Color::RGB(32, 27, 19)) | bgcolor(Color::RGB(255, 248, 243));
+        } 
+        else {
+            // --- DRAW RANGER SCREEN ---
+            if (sel_sutta != last_read_sutta) {
+                cached_text = SuttaLibrary::get_sutta_text(sel_sutta);
+                sel_paragraph = 0; 
+                last_read_sutta = sel_sutta;
+            }
+
+            auto col_1 = vbox({
+                text(" Collections ") | bold | center,
+                separatorLight(),
+                menu_nikaya->Render()
+            }) | borderRounded | size(WIDTH, EQUAL, 25); 
+
+            auto col_2 = vbox({
+                text(" Suttas ") | bold | center,
+                separatorLight(),
+                menu_sutta->Render()
+            }) | borderRounded | size(WIDTH, EQUAL, 35); 
+
+            std::string current_title = suttas.empty() ? "None" : suttas[sel_sutta];
+            auto col_3 = vbox({
+                text(" " + current_title + " ") | bold | center,
+                text(" Translated by Bhikkhu Sujato ") | dim | center,
+                separatorLight(),
+                text(""), 
+
+                hbox({
+                    text("") | flex, 
+                    menu_reader->Render() | vscroll_indicator | yframe | size(WIDTH, LESS_THAN, 80), 
+                    text("") | flex  
+                }) | flex
+
+            }) | borderRounded | flex; 
+
+            return hbox({ col_1, col_2, col_3 }) 
+                   | color(Color::RGB(32, 27, 19))
+                   | bgcolor(Color::RGB(255, 248, 243));
         }
-
-        auto col_1 = vbox({
-            text(" Collections ") | bold | center,
-            separatorLight(),
-            menu_nikaya->Render()
-        }) | borderRounded | size(WIDTH, EQUAL, 25); 
-
-        auto col_2 = vbox({
-            text(" Suttas ") | bold | center,
-            separatorLight(),
-            menu_sutta->Render()
-        }) | borderRounded | size(WIDTH, EQUAL, 35); 
-
-        std::string current_title = suttas.empty() ? "None" : suttas[sel_sutta];
-        auto col_3 = vbox({
-            text(" " + current_title + " ") | bold | center,
-            text(" Translated by Bhikkhu Sujato ") | dim | center,
-            separatorLight(),
-            text(""), 
-
-            // THE UPDATE: Sandwich the reader between two flexible empty spaces
-            hbox({
-                text("") | flex, // Invisible left cushion
-
-                // The text column, locked to a max width of 80 characters
-                menu_reader->Render() | vscroll_indicator | yframe | size(WIDTH, LESS_THAN, 80), 
-
-                text("") | flex  // Invisible right cushion
-            }) | flex
-
-        }) | borderRounded | flex; 
-
-        return hbox({ col_1, col_2, col_3 }) 
-               | color(Color::RGB(32, 27, 19))       // Applies #201b13 to text and borders
-               | bgcolor(Color::RGB(255, 248, 243));
     });
 
+    // 8. Global Keybinds
     renderer |= CatchEvent([&](Event event) {
+        // Pressing Backspace inside the Ranger view takes you back to the menu
+        if (event == Event::Backspace && current_screen == 1) {
+            current_screen = 0;
+            return true;
+        }
+        
         if (event == Event::Character('q') || event == Event::Escape) {
             screen.Exit();
             return true;
