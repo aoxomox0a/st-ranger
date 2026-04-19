@@ -1,6 +1,8 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/component.hpp>
+#include <nlohmann/json.hpp>
+#include <fstream>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -8,6 +10,7 @@
 #include <algorithm>
 
 namespace fs = std::filesystem;
+using json = nlohmann::ordered_json;
 
 // --- HELPER 1: Get Nikayas ---
 std::vector<std::string> get_directories(const fs::path& root) {
@@ -51,9 +54,30 @@ std::vector<std::string> get_sutta_files(const fs::path& nikaya_path) {
 }
 
 // --- HELPER 3: Dummy Text Loader (JSON Removed) ---
-std::string get_sutta_text(int index) {
-    if (index < 0 || index >= current_sutta_paths.size()) return "No sutta selected.";
-    return "JSON parsing disabled for UI testing.\n\nFile: " + current_sutta_paths[index].filename().string();
+// --- HELPER 3: Parse the JSON file ---
+std::vector<std::string> get_sutta_text(int index) {
+    if (index < 0 || index >= current_sutta_paths.size()) return {"No sutta selected."};
+    
+    std::ifstream file(current_sutta_paths[index]);
+    if (!file.is_open()) return {"Error: Could not open file."};
+
+    json j;
+    try {
+        file >> j;
+    } catch (...) {
+        return {"Error: Could not parse JSON. Is the file corrupted?"};
+    }
+
+    std::vector<std::string> lines;
+    for (auto& [key, value] : j.items()) {
+        std::string segment = value.get<std::string>();
+        // Only add the line if it actually contains text (filters out blank segments)
+        if (!segment.empty()) {
+            lines.push_back(segment);
+        }
+    }
+    
+    return lines;
 }
 
 // --- MAIN PROGRAM ---
@@ -72,7 +96,7 @@ int main() {
     }
     int sel_sutta = 0;
 
-    std::string cached_text = get_sutta_text(sel_sutta);
+    std::vector<std::string> cached_text = get_sutta_text(sel_sutta);
     int last_read_sutta = sel_sutta;
 
     auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
@@ -110,13 +134,24 @@ int main() {
         }) | borderRounded | size(WIDTH, EQUAL, 30); 
 
         std::string current_title = suttas.empty() ? "None" : suttas[sel_sutta];
+
+        Elements sutta_paragraphs;
+        for (const auto& line : cached_text) {
+            sutta_paragraphs.push_back(paragraph(line));
+            
+            // Optional: If you want a blank line between every single phrase, 
+            // uncomment the line below:
+            // sutta_paragraphs.push_back(text("")); 
+        }
+
         auto col_3 = vbox({
             text(" " + current_title + " ") | bold | center | color(Color::YellowLight),
             text(" Translated by Bhikkhu Sujato ") | dim | center,
             separatorLight() | color(Color::Orange1),
-            text(""), 
-            paragraph(cached_text) | color(Color::Grey93)
-        }) | borderRounded | flex; 
+            text(""),
+            vbox(sutta_paragraphs) | color(Color::Grey93)
+            // paragraph(cached_text) | color(Color::Grey93)
+        }) | borderRounded | flex;
 
         return hbox({ col_1, col_2, col_3 });
     });

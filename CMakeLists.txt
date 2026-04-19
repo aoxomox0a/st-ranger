@@ -13,11 +13,17 @@ FetchContent_Declare(ftxui
   GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI
   GIT_TAG v6.1.9  # Replace with a version, tag, or commit hash
 )
- 
 FetchContent_MakeAvailable(ftxui)
+
+FetchContent_Declare(json
+  GIT_REPOSITORY https://github.com/nlohmann/json
+  GIT_TAG v3.12.0
+)
+FetchContent_MakeAvailable(json)
  
 target_link_libraries(sutta-ranger
   PRIVATE ftxui::screen
   PRIVATE ftxui::dom
   PRIVATE ftxui::component
+  PRIVATE nlohmann_json::nlohmann_json
 )
