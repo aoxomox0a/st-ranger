@@ -69,7 +69,11 @@ namespace SuttaLibrary {
         if (nikaya_index < 0 || nikaya_index >= current_nikaya_folders.size()) return {"No suttas found"};
         fs::path target_path = library_base_path / current_nikaya_folders[nikaya_index];
 
-        for (const auto& entry : fs::recursive_directory_iterator(target_path)) {
+        // FIX: Tell the iterator to silently skip folders it isn't allowed to read
+        auto options = fs::directory_options::skip_permission_denied;
+        std::error_code ec; // Holds errors silently
+
+        for (const auto& entry : fs::recursive_directory_iterator(target_path, options, ec)) {
             if (entry.is_regular_file() && entry.path().extension() == ".json") {
                 current_sutta_paths.push_back(entry.path());
             }
@@ -105,8 +109,10 @@ namespace SuttaLibrary {
 
         std::vector<std::string> lines;
         for (auto& [key, value] : j.items()) {
-            std::string segment = value.get<std::string>();
-            if (!segment.empty()) lines.push_back(segment);
+            if (value.is_string()) {
+                std::string segment = value.get<std::string>();
+                if (!segment.empty()) lines.push_back(segment);
+            }
         }
         return lines;
     }
