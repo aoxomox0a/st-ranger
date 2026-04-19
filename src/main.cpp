@@ -12,6 +12,7 @@ int main() {
 
     // 2. Application State
     int current_screen = 0; // 0 = Welcome, 1 = Ranger
+    bool zen_mode = false;
 
     std::vector<std::string> baskets = {
         "Basket of Discourses (Sutta Piṭaka)",
@@ -45,7 +46,7 @@ int main() {
         if (state.focused) {
             return vbox({
                 hbox({
-                    text("> ") | bold | color(Color::RGB(32, 27, 19)), 
+                    text(">> ") | bold | color(Color::RGB(32, 27, 19)), 
                     paragraph(state.label) | bold | color(Color::RGB(32, 27, 19))
                 }), 
                 text("")
@@ -96,7 +97,7 @@ int main() {
             // --- DRAW WELCOME SCREEN ---
             return vbox({
                 text(""), text(""), text(""), text(""), // Push down from the top
-                text("S U T T A   C E N T R A L   T U I") | bold | center,
+                text("Sutta Central TUI") | bold | center,
                 text("Read the Buddha's words in your terminal") | dim | center,
                 separatorEmpty(), separatorEmpty(),
                 menu_welcome->Render() | center 
@@ -137,17 +138,36 @@ int main() {
 
             }) | borderRounded | flex; 
 
-            return hbox({ col_1, col_2, col_3 }) 
-                   | color(Color::RGB(32, 27, 19))
-                   | bgcolor(Color::RGB(255, 248, 243));
+            if (zen_mode) {
+                // Renders ONLY the reading pane, perfectly centered
+                return col_3 
+                       | color(Color::RGB(32, 27, 19))
+                       | bgcolor(Color::RGB(255, 248, 243));
+            } else {
+                // Renders the standard 3-column Ranger view
+                return hbox({ col_1, col_2, col_3 }) 
+                       | color(Color::RGB(32, 27, 19))
+                       | bgcolor(Color::RGB(255, 248, 243));
+            }
         }
     });
 
     // 8. Global Keybinds
     renderer |= CatchEvent([&](Event event) {
-        // Pressing Backspace inside the Ranger view takes you back to the menu
+        
+        // NEW: Toggle Zen Mode when 'z' is pressed in the Ranger view
+        if (event == Event::Character('z') && current_screen == 1) {
+            zen_mode = !zen_mode;
+            return true;
+        }
+
+        // UPDATED: Backspace logic
         if (event == Event::Backspace && current_screen == 1) {
-            current_screen = 0;
+            if (zen_mode) {
+                zen_mode = false; // If in Zen Mode, just exit Zen Mode
+            } else {
+                current_screen = 0; // Otherwise, go back to Welcome Screen
+            }
             return true;
         }
         
