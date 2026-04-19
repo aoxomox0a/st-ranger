@@ -1,123 +1,58 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/component.hpp>
-#include <nlohmann/json.hpp>
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <string>
-#include <filesystem>
-#include <algorithm>
+#include "SuttaLibrary.hpp" // <-- Bringing in our backend tool kit!
 
-namespace fs = std::filesystem;
-using json = nlohmann::ordered_json;
-
-// --- HELPER 1: Get Nikayas ---
-std::vector<std::string> get_directories(const fs::path& root) {
-    std::vector<std::string> dirs;
-    if (!fs::exists(root)) return {"Data not found!"};
-
-    for (const auto& entry : fs::directory_iterator(root)) {
-        if (entry.is_directory()) dirs.push_back(entry.path().filename().string());
-    }
-    std::sort(dirs.begin(), dirs.end());
-    return dirs;
-}
-
-// Global state for our actual file paths
-std::vector<fs::path> current_sutta_paths; 
-
-// --- HELPER 2: Get Suttas ---
-std::vector<std::string> get_sutta_files(const fs::path& nikaya_path) {
-    std::vector<std::string> display_names;
-    current_sutta_paths.clear();
-
-    if (!fs::exists(nikaya_path)) return {"No suttas found"};
-
-    for (const auto& entry : fs::recursive_directory_iterator(nikaya_path)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            current_sutta_paths.push_back(entry.path());
-        }
-    }
-    
-    std::sort(current_sutta_paths.begin(), current_sutta_paths.end());
-
-    for (const auto& path : current_sutta_paths) {
-        std::string name = path.stem().string();
-        size_t pos = name.find("_");
-        if (pos != std::string::npos) name = name.substr(0, pos);
-        display_names.push_back(name);
-    }
-    
-    if (display_names.empty()) display_names.push_back("Empty folder");
-    return display_names;
-}
-
-// --- HELPER 3: Dummy Text Loader (JSON Removed) ---
-// --- HELPER 3: Parse the JSON file ---
-std::vector<std::string> get_sutta_text(int index) {
-    if (index < 0 || index >= current_sutta_paths.size()) return {"No sutta selected."};
-    
-    std::ifstream file(current_sutta_paths[index]);
-    if (!file.is_open()) return {"Error: Could not open file."};
-
-    json j;
-    try {
-        file >> j;
-    } catch (...) {
-        return {"Error: Could not parse JSON. Is the file corrupted?"};
-    }
-
-    std::vector<std::string> lines;
-    for (auto& [key, value] : j.items()) {
-        std::string segment = value.get<std::string>();
-        // Only add the line if it actually contains text (filters out blank segments)
-        if (!segment.empty()) {
-            lines.push_back(segment);
-        }
-    }
-    
-    return lines;
-}
-
-// --- MAIN PROGRAM ---
 int main() {
     using namespace ftxui;
     auto screen = ScreenInteractive::Fullscreen();
 
-    fs::path base_path = "data/bilara-data/translation/en/sujato/sutta";
+    // 1. Initialize our backend
+    SuttaLibrary::init("data/bilara-data/translation/en/sujato/sutta");
 
-    std::vector<std::string> nikayas = get_directories(base_path);
+    // 2. Setup the state
+    std::vector<std::string> nikayas = SuttaLibrary::get_nikayas();
     int sel_nikaya = 0;
 
     std::vector<std::string> suttas = {"Loading..."};
     if (nikayas[0] != "Data not found!") {
-        suttas = get_sutta_files(base_path / nikayas[sel_nikaya]);
+        suttas = SuttaLibrary::get_suttas(sel_nikaya);
     }
     int sel_sutta = 0;
 
-    std::vector<std::string> cached_text = get_sutta_text(sel_sutta);
+    std::vector<std::string> cached_text = SuttaLibrary::get_sutta_text(sel_sutta);
     int last_read_sutta = sel_sutta;
+    int sel_paragraph = 0; 
 
+    // 3. Create the UI Menus
     auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
     auto menu_sutta = Menu(&suttas, &sel_sutta);
 
+    MenuOption reader_options;
+    reader_options.entries_option.transform = [](const EntryState& state) {
+        auto p = paragraph(state.label);
+        if (state.focused) return vbox({p | color(Color::White) | bold, text("")});
+        return vbox({p | color(Color::Grey93), text("")});
+    };
+    auto menu_reader = Menu(&cached_text, &sel_paragraph, reader_options);
+
+    // 4. The Logic Bridge
     menu_nikaya |= CatchEvent([&](Event event) {
         if (sel_nikaya >= 0 && sel_nikaya < nikayas.size()) {
-            suttas = get_sutta_files(base_path / nikayas[sel_nikaya]);
+            suttas = SuttaLibrary::get_suttas(sel_nikaya);
             sel_sutta = 0;
+            sel_paragraph = 0; 
         }
         return false; 
     });
 
-    auto container = Container::Horizontal({
-        menu_nikaya,
-        menu_sutta,
-    });
+    auto container = Container::Horizontal({ menu_nikaya, menu_sutta, menu_reader });
 
+    // 5. The Renderer
     auto renderer = Renderer(container, [&] {
         if (sel_sutta != last_read_sutta) {
-            cached_text = get_sutta_text(sel_sutta);
+            cached_text = SuttaLibrary::get_sutta_text(sel_sutta);
+            sel_paragraph = 0; 
             last_read_sutta = sel_sutta;
         }
 
@@ -131,29 +66,28 @@ int main() {
             text(" Suttas ") | bold | center | color(Color::Orange1),
             separatorLight() | color(Color::Orange1),
             menu_sutta->Render()
-        }) | borderRounded | size(WIDTH, EQUAL, 30); 
+        }) | borderRounded | size(WIDTH, EQUAL, 35); 
 
         std::string current_title = suttas.empty() ? "None" : suttas[sel_sutta];
-
-        Elements sutta_paragraphs;
-        for (const auto& line : cached_text) {
-            sutta_paragraphs.push_back(paragraph(line));
-            
-            // Optional: If you want a blank line between every single phrase, 
-            // uncomment the line below:
-            // sutta_paragraphs.push_back(text("")); 
-        }
-
         auto col_3 = vbox({
             text(" " + current_title + " ") | bold | center | color(Color::YellowLight),
             text(" Translated by Bhikkhu Sujato ") | dim | center,
             separatorLight() | color(Color::Orange1),
-            text(""),
-            vbox(sutta_paragraphs) | color(Color::Grey93)
-            // paragraph(cached_text) | color(Color::Grey93)
-        }) | borderRounded | flex;
+            text(""), 
 
-        return hbox({ col_1, col_2, col_3 });
+            // THE UPDATE: Sandwich the reader between two flexible empty spaces
+            hbox({
+                text("") | flex, // Invisible left cushion
+
+                // The text column, locked to a max width of 80 characters
+                menu_reader->Render() | vscroll_indicator | frame | size(WIDTH, LESS_THAN, 80), 
+
+                text("") | flex  // Invisible right cushion
+            }) | flex
+
+        }) | borderRounded | flex; 
+
+        return hbox({ col_1, col_2, col_3 }) | bgcolor(Color::RGB(26, 27, 38));
     });
 
     renderer |= CatchEvent([&](Event event) {
