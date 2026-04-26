@@ -13,6 +13,8 @@ namespace SuttaLibrary {
     std::vector<fs::path> current_sutta_paths; 
     std::vector<std::string> current_nikaya_folders; 
 
+    std::set<std::string> read_suttas;
+
     std::map<std::string, std::string> nikaya_dictionary = {
         {"an", "Aṅguttara Nikāya"},
         {"dn", "Dīgha Nikāya"},
@@ -21,8 +23,13 @@ namespace SuttaLibrary {
         {"sn", "Saṃyutta Nikāya"}
     };
 
+     bool is_read(const std::string& id){
+        return read_suttas.count(id) > 0;
+    }
+
     void init(const fs::path& base_path) {
         library_base_path = base_path;
+        read_suttas.insert("mn1");
     }
 
     std::vector<std::string> get_nikayas() {
@@ -90,7 +97,12 @@ namespace SuttaLibrary {
             for (auto& c : pretty_id) c = std::toupper(c);
 
             std::string title = get_sutta_title(path);
-            display_names.push_back(pretty_id + ": " + title);
+            
+            if (is_read(raw_id)) {
+                display_names.push_back("[x] " + pretty_id + ": " + title);
+            } else {
+                display_names.push_back("[ ] " + pretty_id + ": " + title);
+            }
         }
         
         if (display_names.empty()) display_names.push_back("Empty folder");

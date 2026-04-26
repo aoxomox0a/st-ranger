@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <set>
 
 // This is our "Backend" tool kit
 namespace SuttaLibrary {
@@ -12,4 +13,6 @@ namespace SuttaLibrary {
     std::vector<std::string> get_nikayas();
     std::vector<std::string> get_suttas(int nikaya_index);
     std::vector<std::string> get_sutta_text(int sutta_index);
+
+    bool is_read(const std::string& id);
 }

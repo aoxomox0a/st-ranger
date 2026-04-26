@@ -120,7 +120,7 @@ int main() {
             auto col_2 = vbox({
                 text(" Suttas ") | bold | center,
                 separatorLight(),
-                menu_sutta->Render()
+                menu_sutta->Render() | vscroll_indicator | yframe | flex
             }) | borderRounded | size(WIDTH, EQUAL, 35); 
 
             std::string current_title = suttas.empty() ? "None" : suttas[sel_sutta];
