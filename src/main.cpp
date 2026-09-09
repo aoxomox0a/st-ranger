@@ -7,10 +7,8 @@ int main() {
     using namespace ftxui;
     auto screen = ScreenInteractive::Fullscreen();
 
-    // 1. Initialize our backend
     SuttaLibrary::init("data/bilara-data/translation/en/sujato/sutta");
 
-    // 2. Application State
     int current_screen = 0; // 0 = Welcome, 1 = Ranger
     bool zen_mode = false;
 
@@ -34,7 +32,6 @@ int main() {
     int last_read_sutta = sel_sutta;
     int sel_paragraph = 0; 
 
-    // 3. UI Styling Options
     MenuOption welcome_options;
     welcome_options.entries_option.transform = [](const EntryState& state) {
         if (state.focused) return text(">> " + state.label) | bold | color(Color::RGB(32, 27, 19));
