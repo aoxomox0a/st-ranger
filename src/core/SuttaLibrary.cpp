@@ -8,7 +8,6 @@ namespace fs = std::filesystem;
 using json = nlohmann::ordered_json;
 
 namespace SuttaLibrary {
-    // Hidden internal state
     fs::path library_base_path;
     std::vector<fs::path> current_sutta_paths; 
     std::vector<std::string> current_nikaya_folders; 
@@ -76,7 +75,6 @@ namespace SuttaLibrary {
         if (nikaya_index < 0 || nikaya_index >= current_nikaya_folders.size()) return {"No suttas found"};
         fs::path target_path = library_base_path / current_nikaya_folders[nikaya_index];
 
-        // FIX: Tell the iterator to silently skip folders it isn't allowed to read
         auto options = fs::directory_options::skip_permission_denied;
         std::error_code ec; // Holds errors silently
 

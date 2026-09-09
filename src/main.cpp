@@ -58,13 +58,11 @@ int main() {
         });
     };
 
-    // 4. Create the Components
     auto menu_welcome = Menu(&baskets, &sel_basket, welcome_options);
     auto menu_nikaya = Menu(&nikayas, &sel_nikaya);
     auto menu_sutta = Menu(&suttas, &sel_sutta);
     auto menu_reader = Menu(&cached_text, &sel_paragraph, reader_options);
 
-    // 5. Logic Bridges
     menu_welcome |= CatchEvent([&](Event event) {
         if (event == Event::Return && sel_basket == 0) {
             current_screen = 1; // Swap to the Ranger view!
@@ -82,16 +80,12 @@ int main() {
         return false; 
     });
 
-    // 6. Group the Containers
     auto ranger_container = Container::Horizontal({ menu_nikaya, menu_sutta, menu_reader });
     
-    // The main router that swaps between the Welcome Screen and Ranger Screen
     auto main_container = Container::Tab({ menu_welcome, ranger_container }, &current_screen);
 
-    // 7. The Dynamic Renderer
     auto renderer = Renderer(main_container, [&] {
         if (current_screen == 0) {
-            // --- DRAW WELCOME SCREEN ---
             return vbox({
                 text(""), text(""), text(""), text(""), // Push down from the top
                 text("Sutta Central TUI") | bold | center,
@@ -101,7 +95,6 @@ int main() {
             }) | center | color(Color::RGB(32, 27, 19)) | bgcolor(Color::RGB(255, 248, 243));
         } 
         else {
-            // --- DRAW RANGER SCREEN ---
             if (sel_sutta != last_read_sutta) {
                 cached_text = SuttaLibrary::get_sutta_text(sel_sutta);
                 sel_paragraph = 0; 
@@ -136,12 +129,10 @@ int main() {
             }) | borderRounded | flex; 
 
             if (zen_mode) {
-                // Renders ONLY the reading pane, perfectly centered
                 return col_3 
                        | color(Color::RGB(32, 27, 19))
                        | bgcolor(Color::RGB(255, 248, 243));
             } else {
-                // Renders the standard 3-column Ranger view
                 return hbox({ col_1, col_2, col_3 }) 
                        | color(Color::RGB(32, 27, 19))
                        | bgcolor(Color::RGB(255, 248, 243));
@@ -149,16 +140,12 @@ int main() {
         }
     });
 
-    // 8. Global Keybinds
     renderer |= CatchEvent([&](Event event) {
-        
-        // NEW: Toggle Zen Mode when 'z' is pressed in the Ranger view
         if (event == Event::Character('z') && current_screen == 1) {
             zen_mode = !zen_mode;
             return true;
         }
 
-        // UPDATED: Backspace logic
         if (event == Event::Backspace && current_screen == 1) {
             if (zen_mode) {
                 zen_mode = false; // If in Zen Mode, just exit Zen Mode
